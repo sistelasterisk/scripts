@@ -1,58 +1,63 @@
 from asterisk.manager import Manager
-from asterisk.agi import AGI
-import re
+import sys, re
 
-def send_call(origin, dest):
-    manager = Manager()
+# Funções
+
+def check_channel(event, manager):
+    global state_channel
+
+    # Expressão regular para capturar o número do Device
     try:
-        manager.connect(AMI_HOST, AMI_PORT)
-        manager.login(AMI_USERNAME, AMI_PASSWORD)
-        print("Conexão bem-sucedida com o Asterisk Manager Interface!")
-    except Exception as e:
-        print("Erro ao conectar ao Asterisk Manager Interface:", e)
-        exit()
-   
-    # Criar a ação Originate
+        regex = re.compile(r'\d{4}')
+    
+    finally:    
+
+        # Subalgoritmo
+        if event.name == 'DeviceStateChange':
+            number = event.get_header('Device')
+            number = regex.search(number)
+            if number == None:
+                ...
+            else:
+                number = number.group()
+
+            state = event.get_header('State')
+
+            if number == '7444':
+                print(f'{number}  -->  {state}')
+                
+                if state == 'INUSE':
+                    print('Este ramal está ocupado')
+                    state_channel = 'y'
+                    sys.exit()
+
+                    
+manager = Manager()
+state_channel = ''
+
+try:
+    # Login na central via AMI
+    manager.connect('10.40.165.200', 5038)
+    manager.login('ttag', 'panopreto')
+    
+    print('Monitorando o canal...\nPressione Ctrl + c para sair...')
+    # Verifica o Status do canal
+
     action = {
-        'Action': 'Originate',
-        'Channel': f'PJSIP/{origin}',
-        'Exten': dest,
-        'Context': 'ramais',
-        'Priority': 1,
-        'CallerID': origin,
-        'Timeout': 10000  # Timeout em milissegundos
+        'Action': 'DeviceStateList'
     }
+    manager.register_event('DeviceStateChange', check_channel)
+    manager.send_action(action)
 
-    # Enviar a ação
     try:
-        response = manager.send_action(action)
-        print("Resposta do Asterisk:", response)
-    except Exception as e:
-        print("Erro ao enviar a ação para o Asterisk:", e)
+        while True:
+            manager.event_dispatch()
+          
+    except SystemExit:
+        print('Informe o usuário que o ramal está ocupado e pergunte se deseja efetuar o callback')
 
-    # Desconectar do AMI
+    # Logoff da Central
     manager.logoff()
     manager.close()
-
-
-# Parâmetros de conexão com o Asterisk Manager Interface (AMI)
-AMI_HOST = '10.40.165.200'  # Endereço IP do servidor Asterisk
-AMI_PORT = 5038  # Porta do Asterisk Manager Interface
-AMI_USERNAME = 'ttag'  # Nome de usuário do AMI
-AMI_PASSWORD = 'panopreto'  # Senha do AMI
-
-# Conectando ao Asterisk Manager Interface (AMI)
-
-agi = AGI()
-rege_number = re.compile(r'\d{4}')
-
-destino = agi.env['agi_extension'].strip()
-origem = agi.env['agi_channel']
-origem = rege_number.search(origem).group()
-origem = origem.strip()
-
-agi.verbose(f'Ligação de {origem} para {destino}')
-
-send_call(origem, destino)
-
-agi.verbose('Efetuando ligação entre os ramais...')
+except Exception:
+   print('Programa finalizado')
