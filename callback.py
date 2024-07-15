@@ -14,7 +14,7 @@ def check_status_channel(ramal):
 
     output_command = output_command.split('\n')
 
-    for i, lines in enumerate(output_command):
+    for lines in output_command:
         channel_busy = re.search(re_up, lines)
         channel_free = re.search(re_free, lines)
         channel_ringing = re.search(re_ringing, lines)
