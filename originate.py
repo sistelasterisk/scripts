@@ -62,8 +62,8 @@ def send_call(origin, dest):
         'Exten': dest,
         'Context': 'ramais',
         'Priority': 1,
-        'CallerID': origin,
-        'Timeout': 10000  # Timeout em milissegundos
+        'CallerID': f'Callback para {dest}',
+        'Timeout': 60000  # Timeout em milissegundos
     }
 
     # Enviar a ação
@@ -83,20 +83,20 @@ ramal_destino = '%DEST%'
 
 check_channel = ''
 
-limit_time = 20
+limit_time = 300
 
 check_status_channel(ramal_destino)
 
 initial_time = time.time()
 
 while check_channel != 'free':
+    time.sleep(10)
     decorr_time = time.time() - initial_time
-
     if decorr_time >= limit_time:
         break
 
     check_status_channel(ramal_destino)
-    time.sleep(1)
+    
 
 if check_channel == 'free':
     send_call(origem, ramal_destino)
