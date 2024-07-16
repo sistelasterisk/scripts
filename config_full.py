@@ -790,7 +790,7 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
         # Declaração de variáveis
         quant_arquivos = 0
         lista_modelos = [r'cp-?3905', r'cp-?7821', r'cp-?7942', r'cp-?8845', r'cp-?8865', r'cp-?9845', \
-                         r'gxp-?1615', r'gxp-?1625', r'gxp-?2170', r'yealink-?22p']
+                         r'gxp-?1615', r'gxp-?1625', r'gxp-?2170', 't22p']
 
         # Configuração dos telefones
         cp_3905 = '''<device>
@@ -3463,7 +3463,7 @@ local_time.time_zone_name = Brazil(DST)
 
         #Entrada de Dados
         os.system('clear')
-        opcao_menu =input('Para prosseguir, é necessário que uma planilha esteja no formato "AP.xlsx"\
+        input('Para prosseguir, é necessário que uma planilha esteja no formato "AP.xlsx"\
 e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continuar...')
         os.system('clear')
         ip_asterisk = input("Qual o IP do asterisk? ")
@@ -3484,8 +3484,10 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
 
             # Etapa de tratamento do modelo apresentado na planilha
                modelo = linha[0].value
-               modelo = modelo.lower().strip()
-
+               try:
+                    modelo = modelo.lower().strip()
+               except AttributeError as e:
+                   break
                # Verifica se o valor do modelo está especificado corretamente, através de uma lista
                for modelos in lista_modelos:
                     modelos = re.search(modelos, modelo)
@@ -3515,7 +3517,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                    if num_linha1_bool == True:
 
 
-                       if modelo == 'gxp2170':
+                       if re.search(r'gxp-?2170', modelo):
                            new_name = mac_ramal.lower()
                            new_name = '/srv/tftp/cfg' + new_name + '.xml'
                            new_name = new_name.replace(' ','')
@@ -3573,7 +3575,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
 
 
 
-                       elif modelo == 'gxp1615':
+                       elif re.search(r'gxp-?1615', modelo):
                            if bool(mac_ramal) == True:
                                new_name = mac_ramal.lower()
                                new_name = '/srv/tftp/cfg' + new_name + '.xml'
@@ -3618,12 +3620,12 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                print('* * * * Não Existe MAC associado * * * *')
 
 
-                       elif modelo == 'gxp1625':
+                       elif re.search(r'gxp-?1625', modelo):
                            if bool(mac_ramal) == True:
                                new_name = mac_ramal.lower()
                                new_name = '/srv/tftp/cfg'  + new_name + '.xml'
                                new_name = new_name.replace(' ','')
-
+                               
                                shell(f'touch {new_name}')
                                write_text(new_name, gxp_1615)
 
@@ -3718,7 +3720,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                replace_pat(new_name, '%asterisk3%', '')
                                replace_pat(new_name, '%pass3%', '')
 
-                       elif modelo == 'cp-3905':
+                       elif re.search(r'cp-?3905', modelo):
                            if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
                                new_name = '/srv/tftp/SEP' + new_name + '.cnf.xml'
@@ -3749,7 +3751,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                            else:
                                print('* * * * Não Existe MAC associado * * * *')
 
-                       elif modelo == 'cp-7821':
+                       elif re.search(r'cp-?7821', modelo):
                            if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
                                new_name = '/srv/tftp/SEP' + new_name + '.cnf.xml'
@@ -3783,7 +3785,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
 
 
 
-                       elif modelo == 'cp-8845':
+                       elif re.search(r'cp-?8845', modelo):
                             if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
                                new_name = '/srv/tftp/SEP' + new_name + '.cnf.xml'
@@ -3815,7 +3817,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                             else:
                                print('* * * * Não Existe MAC associado * * * *')
 
-                       elif modelo == 'cp-8865':
+                       elif re.search(r'cp-?8865', modelo):
 
                             if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
@@ -3850,7 +3852,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                print('* * * * Não Existe MAC associado * * * *')
 
 
-                       elif modelo == 'cp-7942':
+                       elif re.search(r'cp-?7942', modelo):
 
                             if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
@@ -3883,7 +3885,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                             else:
                                print('* * * * Não Existe MAC associado * * * *')
 
-                       elif modelo == 'cp-9845':
+                       elif re.search(r'cp-?9845', modelo):
 
                             if bool(mac_ramal) == True:
                                new_name = mac_ramal.upper()
@@ -3921,14 +3923,11 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
 
                except:
                    print('Fim da Planilha')
-        for arquivo in os.listdir():
+        for arquivo in os.listdir('/srv/tftp'):
             if arquivo.endswith('.xml'):
                 quant_arquivos += 1
             elif arquivo.endswith('.cfg'):
                 quant_arquivos += 1
         print('\n* * * * Fim da Planilha! * * * *\n')
         print(f'* * * * Foram gerados {quant_arquivos} arquivos de configuração * * * *\n')
-        if opcao_menu == 's':
-            continue
-        elif opcao_menu == 'n':
-            break
+        break
