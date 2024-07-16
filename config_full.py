@@ -789,8 +789,8 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
 
         # Declaração de variáveis
         quant_arquivos = 0
-        lista_modelos = ['cp-3905', 'cp-7821', 'cp-7942', 'cp-8845', 'cp-8865', 'cp-9845', \
-                         'gxp-1615', 'gxp-1625', 'gxp-2170', 'yealink-22p']
+        lista_modelos = [r'cp-?3905', r'cp-?7821', r'cp-?7942', r'cp-?8845', r'cp-?8865', r'cp-?9845', \
+                         r'gxp-?1615', r'gxp-?1625', r'gxp-?2170', r'yealink-?22p']
 
         # Configuração dos telefones
         cp_3905 = '''<device>
@@ -3482,25 +3482,34 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
 
         for indice, linha in enumerate(sheet_alunos.iter_rows(min_row=2)):
 
+            # Etapa de tratamento do modelo apresentado na planilha
                modelo = linha[0].value
-               modelo = modelo.lower()
-               if modelo not in lista_modelos:
-                   print(f'O modelo {modelo} não é válido')
+               modelo = modelo.lower().strip()
+
+               # Verifica se o valor do modelo está especificado corretamente, através de uma lista
+               for modelos in lista_modelos:
+                    modelos = re.search(modelos, modelo)
+                    if modelos:
+                        model_listed = True
+                        break
+                    else:
+                        model_listed = False
+
+               if model_listed == False:
+                   print(f'O modelo {modelo} está incorreto')
                    continue
+
+               # Captura os demais campos da planilha, caso o modelo seja válido                
                mac_ramal = linha[1].value
                mac_ramal = str(mac_ramal)
                mac_ramal = correcao_mac(mac_ramal)
                num_linha1 = linha[2].value
-            #   num_linha2 = linha[4].value
-               num_linha2 = ''
-            #   num_linha3 = linha[5].value
-               num_linha3 = ''
-               nome_ramal = linha[3].value
+               num_linha2 = linha[3].value
+               num_linha3 = linha[4].value
+               nome_ramal = linha[5].value
                num_linha1_bool = bool(num_linha1)
-            #   num_linha2_bool = bool(num_linha2)
-               num_linha2_bool = None
-            #   num_linha3_bool = bool(num_linha3)
-               num_linha3_bool = None
+               num_linha2_bool = bool(num_linha2)
+               num_linha3_bool = bool(num_linha3)
 
                try:
                    if num_linha1_bool == True:

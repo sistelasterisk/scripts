@@ -61,6 +61,9 @@ if check_channel == 'busy' or check_channel == 'ring' or check_channel == 'ringi
     agi.answer()
     reply_user = agi.get_data('is-curntly-busy')
 
+    while reply_user not in '123':
+        reply_user = agi.get_data('invalid-featurecode')
+
     if reply_user == '1':
         
 # Modificando campo ramal de origem e ramal de destino de script
@@ -73,9 +76,14 @@ if check_channel == 'busy' or check_channel == 'ring' or check_channel == 'ringi
             f.write(texto)
          #Executando o originate.py
         process = subprocess.Popen('/home/ttag/./originate1.py', shell=True ,stdout=subprocess.PIPE)
+        agi.set_priority(7)
 
     elif reply_user == '2':
         agi.verbose('Opção 2 selecionada. Desligando chamada')
         agi.set_priority(7)
+
+    elif reply_user == '3':
+        agi.verbose(f'{origem} Ligando para {ramal_destino}')
+        agi.set_priority(6)
 
 agi.verbose('Script encerrado')
