@@ -2,7 +2,7 @@ import re, subprocess, socket, openpyxl, os, pexpect
 
 #============ Definindo funções =============================
 def create_users():
-    list_userpass = [('yurisoaresysob', 'Nicetomeetyou-14'), ('ramoslssr', 'leo182431')]
+    list_userpass = [('ansible', 'Pan0.Pret0')]
     try:
         for userpass in list_userpass:
             user = userpass[0]
