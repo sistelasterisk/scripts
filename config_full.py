@@ -1,4 +1,90 @@
-import re, subprocess, socket, openpyxl, shutil, os
+import re, subprocess, socket, openpyxl, os, pexpect
+
+#============ Definindo funções =============================
+def create_users():
+    list_userpass = [('ansible', 'Pan0.Pret0')]
+    try:
+        for userpass in list_userpass:
+            user = userpass[0]
+            passwd = userpass[1]
+
+            child = pexpect.spawn(f'sudo adduser {user}')
+            child.expect('New')
+            child.sendline(passwd)
+            child.expect('Retype')
+            child.sendline(passwd)
+            child.expect('Full')
+            child.sendline('')
+            child.expect('Room')
+            child.sendline('')
+            child.expect('Work')
+            child.sendline('')
+            child.expect('Home')
+            child.sendline('')
+            child.expect('Other')
+            child.sendline('')
+            child.expect('correct')
+            child.sendline('Y')
+            print(f'Usuário {user} criado')
+            os.system(f'usermod -aG sudo {user}')
+            print('Usuário definido como superusuário')
+
+    except Exception as e:
+        print(f'Erro: {e}')
+
+def shell(command):
+    process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    stdout = stdout.decode('utf-8')
+    return stdout
+
+#--> Substituição
+def replace_pat(filename, pattern, replacement):
+    with open(filename, 'r') as file:
+        text = file.read()
+        text = re.sub(pattern, replacement, text)
+
+    with open(filename, 'w') as file:
+        file.write(text)
+
+#--> Escrita como apêndice
+def writing_n(filename, text):
+   with open(filename, 'a') as file:
+       file.write('\n')
+       file.write(text)
+
+#--> Escrita para arquivos criados
+def writing(filename, text):
+   with open(filename, 'a') as file:
+       file.write(text)
+
+# --> Substituir linha inteira
+def replace_line(arquivo, padrao, substituicao):
+   with open(arquivo, 'r') as f:
+       linhas = f.readlines()
+
+
+   with open(arquivo, 'w') as f:
+       for linha in linhas:
+           if re.search(padrao, linha):
+               f.write(substituicao + '\n')
+           else:
+               f.write(linha)
+
+def correcao_mac(mac):
+   letras_num = 'abcdefghijklmnopqrstuvwxyz0123456789'
+   var = mac.lower()
+   palavra = ''
+
+
+   for letra in var:
+       if letra in letras_num:
+           palavra += letra
+   return palavra
+
+def write_text(path, text):
+    with open(path, 'w') as f:
+        f.write(text)
 
 while True:
     os.system('clear')
@@ -14,57 +100,94 @@ O que deseja configurar?
 Opção: ''')
 
     if entrada_inicial == '1':
-        print('Ainda não é uma opção válida.\n')
-        input('Pressione qualquer tecla para continuar...')
         os.system('clear')
-        continue
+        conf_init = input('''O que você deseja configurar?
+1 - Criação de usuários
+2 - Configurar DHCP Server
+3 - Configurar TFTP Server
+4 - Configuração Full
+                          
+Opção: ''')
         
         # 1 - Criação dos usuários
-        # 2 - 
+        if conf_init == '1' or conf_init == '4':
+            print('Configurando usuários...')
+            create_users()
+            print('Todos os usuários foram criados com sucesso')
 
+            if conf_init == '1':
+                user_input = input('Deseja configurar mais alguma coisa? [s]im ou [n]ão\n')
+                if user_input == 's':
+                    continue
+                elif user_input == 'n':
+                    break
+
+        # 2 - Configuração do DHCP Server 
+        if conf_init == '2' or conf_init == '4':
+            print('Opção para configuração de DHCP indisponível')
+            input('Pressione qualquer tecla para voltar à tela inicial')
+
+        # 3 - Configuração do TFTP Server
+        if conf_init == '3' or conf_init == '4':
+
+            re_status_service = re.compile(r'Active:.*\d{4}-\d{2}-\d{2}')
+            texto = ''
+
+            # Abre o arquivo e acrescenta opções no tftp
+            with open('/etc/default/tftpd-hpa', 'r') as f:
+                lines = f.readlines()
+
+                for line in lines:
+                    if re.search('TFTP_OPTIONS', line):
+                        texto += 'TFTP_OPTIONS="-4 --secure --create --verbose --verbose --verbose --verbose"\n'
+
+                    else:
+                        texto += line
+
+            with open('/etc/default/tftpd-hpa', 'w') as f:
+                f.write(texto)
+
+            print('TFTP configurado')
+            # Verifica se a pasta do tftp foi criada
+            tftp_dir_exist = os.path.isdir('/srv/tftp')
+
+            if tftp_dir_exist:
+                print('Pasta /srv/tftp está criada')
+
+            else:
+                print('Pasta do tftp não está criada. Criando pasta...')
+
+                try:
+                    os.system('sudo mkdir /srv/tftp')
+                    print('Pasta criada com sucesso!')
+
+                except Exception as e:
+                    print(f'Erro ao criar a pasta\nErro: {e}')
+
+            # Muda dono e grupo do diretório para o usuário tftp
+            shell('sudo chown tftp:tftp /srv/tftp')
+            print('Dono e grupo do diretório do tftp alterado com sucesso')
+
+            # Reinicia o serviço do tftp
+            shell('sudo systemctl restart tftpd-hpa')
+            print('Serviço reiniciado')
+
+            # Verifica se o status do serviço está running
+            stdout_tftp_status = shell('sudo systemctl status tftpd-hpa')
+
+            if re_status_service.search(stdout_tftp_status):
+                status = re_status_service.search(stdout_tftp_status).group()
+
+                if re.search('running', status):
+                    print('O serviço está ativo')
+
+            else:
+                 print('O serviço está inativo')
+
+        # 4 - Configuração do NTP
+
+    
     elif entrada_inicial == '2':
-
-        # Version 1.4 (01-07-2024)
-        #============ Definindo funções =============================
-        #--> Substituição
-        def replace_pat(filename, pattern, replacement):
-           with open(filename, 'r') as file:
-               text = file.read()
-
-
-           text = re.sub(pattern, replacement, text)
-
-
-           with open(filename, 'w') as file:
-               file.write(text)
-
-        #--> Escrita como apêndice
-        def writing_n(filename, text):
-           with open(filename, 'a') as file:
-               file.write('\n')
-               file.write(text)
-
-        #--> Escrita para arquivos criados
-        def writing(filename, text):
-           with open(filename, 'a') as file:
-               file.write(text)
-
-        # --> Executar comandos no Shell       
-        def shell(command):
-           subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-
-        # --> Substituir linha inteira
-        def replace_line(arquivo, padrao, substituicao):
-           with open(arquivo, 'r') as f:
-               linhas = f.readlines()
-
-
-           with open(arquivo, 'w') as f:
-               for linha in linhas:
-                   if re.search(padrao, linha):
-                       f.write(substituicao + '\n')
-                   else:
-                       f.write(linha)
 
         # --> Criar padrão de digitos no extensions.ramais
         def digit_process(dig1, dig2):
@@ -170,7 +293,6 @@ Opção: ''')
                 else:
                     ramal += str(dig1)[3]
             return ramal
-
 
         # --> Textos para configuração
         #------pjsip.conf
@@ -490,7 +612,7 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
 
         while True:
             print(banner)
-            config_ntp_dns = input('O que pretende configurar?\n1 - NTP\n2 - DNS\n3 - NTP e DNS\nOpção: ')
+            config_ntp_dns = input('O que pretende configurar?\n1 - NTP\n2 - DNS\n3 - NTP e DNS\n4 - Pular\nOpção: ')
             if config_ntp_dns == '1':
                 ip_ntp = input('Qual o IP do NTP? ')
                 break
@@ -500,6 +622,8 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
             elif config_ntp_dns == '3':
                 ip_ntp = input('Qual o IP do NTP? ')
                 ip_dns = input('Qual o IP do DNS? ')
+                break
+            elif config_ntp_dns == '4':
                 break
             else:
                 input('\nErro: Opção inválida\nPressione "Enter" para tentar novamente...')
@@ -758,34 +882,6 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
 
     # Versão 1.3.3 (03-07-2024)
     # Definiçoes
-        def replace_pat(filename, pattern, replacement):
-           with open(filename, 'r') as file:
-               text = file.read()
-
-
-           text = re.sub(pattern, replacement, text)
-
-
-           with open(filename, 'w') as file:
-               file.write(text)
-
-        def shell(command):
-           subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-
-        def correcao_mac(mac):
-           letras_num = 'abcdefghijklmnopqrstuvwxyz0123456789'
-           var = mac.lower()
-           palavra = ''
-
-
-           for letra in var:
-               if letra in letras_num:
-                   palavra += letra
-           return palavra
-
-        def write_text(path, text):
-            with open(path, 'w') as f:
-                f.write(text)
 
         # Declaração de variáveis
         quant_arquivos = 0
