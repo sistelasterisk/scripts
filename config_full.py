@@ -103,14 +103,16 @@ Opção: ''')
         os.system('clear')
         conf_init = input('''O que você deseja configurar?
 1 - Criação de usuários
-2 - Configurar DHCP Server
-3 - Configurar TFTP Server
-4 - Configuração Full
+2 - Criação de interfaces virtuais
+3 - Configurar DHCP Server
+4 - Configurar TFTP Server
+5 - Configurar NTPSEC                          
+6 - Configuração Full
                           
 Opção: ''')
         
         # 1 - Criação dos usuários
-        if conf_init == '1' or conf_init == '4':
+        if conf_init == '1' or conf_init == '6':
             print('Configurando usuários...')
             create_users()
             print('Todos os usuários foram criados com sucesso')
@@ -122,14 +124,20 @@ Opção: ''')
                 elif user_input == 'n':
                     break
 
-        # 2 - Configuração do DHCP Server 
-        if conf_init == '2' or conf_init == '4':
+        # 2 - Criação de interfaces virtuais
+        if conf_init == '2' or conf_init == '6':
+            input('Opção se encontra indisponível.\nPressione qualquer tecla para voltar ao menu principal...')
+            continue
+
+        # 3 - Configuração do DHCP Server 
+        if conf_init == '3' or conf_init == '6':
             print('Opção para configuração de DHCP indisponível')
             input('Pressione qualquer tecla para voltar à tela inicial')
+            continue
 
-        # 3 - Configuração do TFTP Server
-        if conf_init == '3' or conf_init == '4':
-
+        # 4 - Configuração do TFTP Server
+        if conf_init == '4' or conf_init == '6':
+            print('Iniciando a configuração do TFTP...\n')
             re_status_service = re.compile(r'Active:.*\d{4}-\d{2}-\d{2}')
             texto = ''
 
@@ -147,30 +155,36 @@ Opção: ''')
             with open('/etc/default/tftpd-hpa', 'w') as f:
                 f.write(texto)
 
-            print('TFTP configurado')
+            print('Configurando o usuário e o grupo TFTP\n')
+
+            shell('sudo groupadd tftp')
+            shell('sudo useradd -G tftp tftp')
+
+            print('Grupo e usuário tftp criado!\n')
+
             # Verifica se a pasta do tftp foi criada
             tftp_dir_exist = os.path.isdir('/srv/tftp')
 
             if tftp_dir_exist:
-                print('Pasta /srv/tftp está criada')
+                print('Pasta /srv/tftp está criada\n')
 
             else:
-                print('Pasta do tftp não está criada. Criando pasta...')
+                print('Pasta do tftp não está criada. Criando pasta...\n')
 
                 try:
                     os.system('sudo mkdir /srv/tftp')
-                    print('Pasta criada com sucesso!')
+                    print('Pasta criada com sucesso!\n')
 
                 except Exception as e:
-                    print(f'Erro ao criar a pasta\nErro: {e}')
+                    print(f'Erro ao criar a pasta\nErro: {e}\n')
 
             # Muda dono e grupo do diretório para o usuário tftp
             shell('sudo chown tftp:tftp /srv/tftp')
-            print('Dono e grupo do diretório do tftp alterado com sucesso')
+            print('Dono e grupo do diretório do tftp alterado com sucesso\n')
 
             # Reinicia o serviço do tftp
             shell('sudo systemctl restart tftpd-hpa')
-            print('Serviço reiniciado')
+            print('Serviço reiniciado\n')
 
             # Verifica se o status do serviço está running
             stdout_tftp_status = shell('sudo systemctl status tftpd-hpa')
@@ -179,14 +193,16 @@ Opção: ''')
                 status = re_status_service.search(stdout_tftp_status).group()
 
                 if re.search('running', status):
-                    print('O serviço está ativo')
+                    print('O serviço está ativo\n')
 
             else:
-                 print('O serviço está inativo')
+                 print('O serviço está inativo\n')
 
-        # 4 - Configuração do NTP
-
-    
+        # 5 - Configuração do NTPSEC
+        if conf_init == '5' or conf_init == '6':
+            input('Opção se encontra indisponível.\nPressione qualquer tecla para voltar ao menu principal...')
+            continue
+           
     elif entrada_inicial == '2':
 
         # --> Criar padrão de digitos no extensions.ramais
@@ -865,6 +881,11 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
                 check_create_conf += '\npjsip.pstn ............ OK'
             else:
                 check_create_conf += '\npjsip.pstn ............ Não Criado'
+            
+            # Recarregando arquivos pjsip e extension
+            shell('sudo asterisk -rx "pjsip reload"')
+            shell('sudo asterisk -rx "dialplan reload"')
+            print('\nArquivos carregados (pjsip e dialplan)')
 
             print(check_create_conf)
         elif prosseguir_2 == 'n':
