@@ -728,7 +728,7 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
                 print('features.conf............ \u2718')
 
             # ---> extensions.ramais
-            print('*----Criando extensions.ramais ----*\n')
+            print('\n*----Criando extensions.ramais ----*\n')
             try:
                 shell('touch /etc/asterisk/extensions.ramais')
                 print('*----extensions.conf criado!----*\n')
@@ -841,9 +841,9 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
 
             #------> Listando o que foi criado
             print('''
-                  ******************************************************************
-                  ******************************************************************
-                  ******************************************************************\n''')
+***************************************************************************************
+***************************************************************************************
+***************************************************************************************\n''')
             check_create_conf = ''
             if os.path.isfile('/etc/asterisk/extensions.conf'):
                 check_create_conf += '\nextensions.conf ............ OK'
