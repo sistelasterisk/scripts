@@ -1067,8 +1067,8 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
                 check_create_conf += '\npjsip.pstn ............ Não Criado'
             
             # Recarregando arquivos pjsip e extension
-            shell('sudo asterisk -rx "pjsip reload"')
-            shell('sudo asterisk -rx "dialplan reload"')
+            os.system('sudo asterisk -rx "pjsip reload"')
+            os.system('sudo asterisk -rx "dialplan reload"')
             print('\nArquivos carregados (pjsip e dialplan)')
 
             print(check_create_conf)
