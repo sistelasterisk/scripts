@@ -107,7 +107,6 @@ Opção: ''')
 3 - Configurar DHCP Server
 4 - Configurar TFTP Server
 5 - Configurar NTPSEC                          
-6 - Configuração Full
                           
 Opção: ''')
         
@@ -407,6 +406,7 @@ Opção:  ''')
                     interfaces_configured = True
 
                     os.system('clear')
+                      
 
         # 3 - Configuração do DHCP Server 
         if conf_init == '3' or conf_init == '6':
@@ -622,8 +622,13 @@ authoritative;
             texto = ''
 
             # Abre o arquivo e acrescenta opções no tftp
-            with open('/etc/default/tftpd-hpa', 'r') as f:
-                lines = f.readlines()
+            try:
+                with open('/etc/default/tftpd-hpa', 'r') as f:
+                    lines = f.readlines()
+
+            except FileNotFoundError as e:
+                input('Arquivo tftp-hpa não encontrado. Verifique se o arquivo se encontra no diretório /etc/default\nPressione qualquer tecla para continuar')
+                continue
 
                 for line in lines:
                     if re.search('TFTP_OPTIONS', line):
