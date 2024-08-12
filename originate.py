@@ -1,3 +1,5 @@
+#! usr/bin/env python3
+
 from asterisk.manager import Manager
 import time, subprocess, re
 
