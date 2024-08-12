@@ -1,3 +1,5 @@
+#! usr/bin/env python3
+
 from asterisk.agi import AGI
 import subprocess, re
 
