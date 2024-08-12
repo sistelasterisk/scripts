@@ -1,3 +1,5 @@
+#! usr/bin/env python3
+
 import re, subprocess, socket, openpyxl, os, pexpect, shutil, inquirer, ipaddress
 
 #============ Definindo funções =============================
