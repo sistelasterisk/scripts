@@ -1,4 +1,4 @@
-import re, subprocess, socket, openpyxl, os, pexpect, shutil
+import re, subprocess, socket, openpyxl, os, pexpect, shutil, inquirer, ipaddress
 
 #============ Definindo funções =============================
 def create_users():
@@ -107,7 +107,6 @@ Opção: ''')
 3 - Configurar DHCP Server
 4 - Configurar TFTP Server
 5 - Configurar NTPSEC                          
-6 - Configuração Full
                           
 Opção: ''')
         
@@ -126,6 +125,76 @@ Opção: ''')
 
         # 2 - Criação de interfaces virtuais
         if conf_init == '2' or conf_init == '6':
+
+            def remove_subint():
+                ...
+
+            def increase_subint(netplan_path):
+                text_default_subin = ''
+                with open(netplan_path, 'r') as f:
+                    text = f.read()
+
+                text_inLines = text.split('\n')
+
+                interfaces = re.findall(r'(e.*\d+.*):', text)
+                
+                questions = [
+                    inquirer.List('inter', message='Selecione uma interface:', choices=interfaces, default=interfaces[0])
+                ]
+
+                answers = inquirer.prompt(questions)
+
+                while True:
+                    os.system('clear')
+                    id_vlan = input('\nQual o ID da Vlan?\n')
+                    ip_mask = input('\nQual o IP e Máscara da subinterface?\nEx.: 10.40.165.10/23\n')
+                    ip_gateway = input('\nQual o IP do gateway?\n')
+
+                    if re.search(r'\w+', text_inLines[-1]):
+                        text_default_subin = '\n'
+                    
+                    text_default_subin += f'''                {answers['inter']}.{id_vlan}:
+                                addresses:
+                                - {ip_mask}
+                                id: {id_vlan}
+                                link: {answers['inter']}
+                                routes:
+                                -   to: default
+                                    via: {ip_gateway}
+            '''
+                    user_input = input('\nDeseja configurar outra VLAN? [s ou n]\n')
+
+                    if user_input == 's':
+                        continue
+                    else:
+                        break
+                
+                text += text_default_subin
+
+                with open(netplan_path, 'w') as f:
+                    f.write(text)
+
+                user_input = input('\nNetplan configurado! Deseja aplicar a configuração? [s ou n]\n')
+
+                if user_input == 's':
+                    os.system('netplan apply')
+                    input('\nConfigurações aplicadas. Pressione qualquer tecla para continuar...')
+
+                else:
+                    input('\nNetplan configurado, porém configurações não foram aplicadas. Pressione qualquer tecla...')
+
+            def view_netplan(netplan_path):
+                with open(netplan_path, 'r') as f:
+                    text = f.read()
+                print(f'\n{text}')
+
+            def shell(command):
+                process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+                stdout, stderr = process.communicate()
+                stdout = stdout.decode('utf-8')
+
+                return stdout
+
             os.system('clear')
 
             # ----------- VARIÁVEIS ------------------
@@ -134,13 +203,13 @@ Opção: ''')
             list_vlans = []
 
             netplan_text = '''network:
-                version: 2
-                ethernets:
-                    '''
+    version: 2
+    ethernets:
+        '''
             interfacesPrompt = ''
 
             # --> Expressões regulares
-            re_interfaces = re.compile(r'\d:\s*(en.*):')
+            re_interfaces = re.compile(r'\d+:\s*(e\w*\d+):')
 
             # ---------- ALGORITMO -------------------
             # --> Verifica arquivos netplan disponíveis para config e faz backup
@@ -156,154 +225,395 @@ Opção: ''')
             if len(list_netplan) > 1:
                 list_on_text = ''
 
-                for i, item in enumerate(list_netplan):
-                    i += 1
-                    list_on_text += f'{i} - {item}\n'
 
-                user_input = input(f'Selecione o arquivo que você deseja editar:\n{list_on_text}')
-                user_input = int(user_input)
-                netplan_file = list_netplan[user_input-1]
+                question = [
+                    inquirer.List('netplan', 
+                                message='Selecione o arquivo que você deseja editar:',
+                                choices=list_netplan,
+                                default=list_netplan[0])
+                ]
+
+                answer = inquirer.prompt(question)
+
+                netplan_file = str(answer['netplan'])
 
                 print('Fazendo backup do arquivo de configuração do netplan')
-                shutil.copy(f'/etc/netplan/{list_netplan[user_input-1]}', f'/etc/netplan/{list_netplan[user_input - 1]}.backup')
+                shutil.copy(f'/etc/netplan/{netplan_file}', f'/etc/netplan/{netplan_file}.backup')
                 input('Backup realizado. Pressione qualquer tecla para continuar...')
                 os.system('clear')
 
-            # --> Configura o netplan
-            com = shell('ip a')
-
-            interfaces = re_interfaces.findall(com)
-
-            if len(interfaces) == 0:
-                print('Não existem interfaces Ethernet para configurar')
-
-            elif len(interfaces) == 1:
-                user_input = input(f'Deseja configurar a interface {interfaces[0]}? [s ou n]\n')
-                netplan_text += f'''{interfaces[0]}: {{}}
-                vlans:
-                    '''
-
-                if user_input.startswith('s'):
-                    allVlansCreate = input('\nInforme quais VLANs deseja criar?\nEx.: 1, 165, 224\n')
-                    allVlansCreate = allVlansCreate.split(',')
-
-                    for vlan in allVlansCreate:    
-                        list_vlans.append(vlan.strip())
-
-                    for i, vlan in enumerate(list_vlans):
-                        os.system('clear')
-
-                        i += 1
-
-                        ip_vlan = input(f'Informe o IP da interface vlan {vlan}:\n')
-                        mask_vlan = input('\nInforme a máscara:\nEx.: 24 no caso de uma \\24\n')
-                        ip_gateway = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}', ip_vlan)
-                        ip_gateway = ip_gateway.group(1)
-                        ip_gateway += '1'
-
-
-                        while True:
-                            ip_gateway_userInput = input(f'\nO ip do gateway é {ip_gateway}? [s ou n]\n')
-
-                            if ip_gateway_userInput == 'n':
-                                ip_gateway = input('\nQual o IP do gateway?\n')
-                                break
-
-                            elif ip_gateway_userInput == 's':
-                                break
-
-                            else:
-                                input('Opção incorreta. Pressione qualquer tecla para tentar novamente')
-                        
-                        netplan_text += f'''{interfaces[0]}.{vlan}:
-                        addresses:
-                        - {ip_vlan}/{mask_vlan}
-                        id: {vlan}
-                        link: {interfaces[0]}
-                        routes:
-                        -   to: default
-                            via: {ip_gateway}
-                            metric: {i}00
-                    '''
-                    
-                    with open(f'/etc/netplan/{netplan_file}', 'w') as f:
-                        f.write(netplan_text)
-
+            # --> Fornece opções
+            while True:
                 os.system('clear')
+                user_input = input('''O que deseja fazer?
+1 - Visualizar arquivo netplan
+2 - Adicionar subinterfaces
+3 - Criar um novo netplan (do zero)
+                                
+Opção:  ''')
 
-            elif len(interfaces) > 1:   
-                for i, interface in enumerate(interfaces):
-                    i += 1
-                    interfacesPrompt += f'{i} - {interface}\n'
-                user_input = input(f'Qual interface deseja configurar?\n{interfacesPrompt}')
-                user_input = int(user_input)
+                if user_input == '1':
+                    view_netplan(f'/etc/netplan/{netplan_file}')
+                    input('\nPressione qualquer tecla para retornar ao menu anterior...')
 
-                netplan_text += f'''{interfaces[user_input-1]}: {{}}
-                vlans:
-                    '''
+                if user_input == '2':
+                    increase_subint(f'/etc/netplan/{netplan_file}')
+                    input('\nPressione qualquer tecla para retornar ao menu anterior...')
 
-                if user_input:
-                    allVlansCreate = input('\nInforme quais VLANs deseja criar?\nEx.: 1, 165, 224\n')
-                    allVlansCreate = allVlansCreate.split(',')
+                if user_input == '3':
+                    os.system('clear')
+                    # --> Configura o netplan
+                    com = shell('ip a')
 
-                    for vlan in allVlansCreate:    
-                        list_vlans.append(vlan.strip())
+                    interfaces = re_interfaces.findall(com)
 
-                    for i, vlan in enumerate(list_vlans):
+                    if len(interfaces) == 0:
+                        print('Não existem interfaces Ethernet para configurar')
+
+                    elif len(interfaces) == 1:
+                        user_input = input(f'Deseja configurar a interface {interfaces[0]}? [s ou n]\n')
+                        netplan_text += f'''{interfaces[0]}: {{}}
+    vlans:
+        '''
+
+                        if user_input.startswith('s'):
+                            allVlansCreate = input('\nInforme quais VLANs deseja criar?\nEx.: 1, 165, 224\n')
+                            allVlansCreate = allVlansCreate.split(',')
+
+                            for vlan in allVlansCreate:    
+                                list_vlans.append(vlan.strip())
+
+                            for i, vlan in enumerate(list_vlans):
+                                os.system('clear')
+
+                                i += 1
+
+                                ip_vlan = input(f'Informe o IP da interface vlan {vlan}:\n')
+                                mask_vlan = input('\nInforme a máscara:\nEx.: 24 no caso de uma \\24\n')
+                                ip_gateway = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}', ip_vlan)
+                                ip_gateway = ip_gateway.group(1)
+                                ip_gateway += '1'
+
+
+                                while True:
+                                    ip_gateway_userInput = input(f'\nO ip do gateway é {ip_gateway}? [s ou n]\n')
+
+                                    if ip_gateway_userInput == 'n':
+                                        ip_gateway = input('\nQual o IP do gateway?\n')
+                                        break
+                                    
+                                    elif ip_gateway_userInput == 's':
+                                        break
+                                    
+                                    else:
+                                        input('Opção incorreta. Pressione qualquer tecla para tentar novamente')
+
+                                netplan_text += f'''{interfaces[0]}.{vlan}:
+    addresses:
+    - {ip_vlan}/{mask_vlan}
+    id: {vlan}
+    link: {interfaces[0]}
+    routes:
+    -   to: default
+        via: {ip_gateway}
+        metric: {i}00
+'''
+
+                            with open(f'/etc/netplan/{netplan_file}', 'w') as f:
+                                f.write(netplan_text)
+
                         os.system('clear')
 
-                        i += 1
+                    elif len(interfaces) > 1:   
 
-                        ip_vlan = input(f'Informe o IP da interface vlan {vlan}:\n')
-                        mask_vlan = input('\nInforme a máscara:\nEx.: 24 no caso de uma \\24\n')
-                        ip_gateway = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}', ip_vlan)
-                        ip_gateway = ip_gateway.group(1)
-                        ip_gateway += '1'
+                        question = [
+                            inquirer.List('inter',
+                                        message='Qual interface deseja configurar?',
+                                        choices=interfaces,
+                                        default=interfaces[0])
+                        ]
+
+                        answers = inquirer.prompt(question)
+
+                        interface = str(answers['inter'])
+
+                        netplan_text += f'''{interface}: {{}}
+    vlans:
+        '''
+
+                        if user_input:
+                            allVlansCreate = input('\nInforme quais VLANs deseja criar?\nEx.: 1, 165, 224\n')
+                            allVlansCreate = allVlansCreate.split(',')
+
+                            for vlan in allVlansCreate:    
+                                list_vlans.append(vlan.strip())
+
+                            for i, vlan in enumerate(list_vlans):
+
+                                i += 1
+
+                                while True:
+                                    os.system('clear')
+                                    
+                                    ip_vlan = input(f'Informe o IP da interface vlan {vlan}:\n')
+                                    mask_vlan = input('\nInforme a máscara:\nEx.: 24 no caso de uma \\24\n')
+
+                                    try:
+                                        ip_gateway = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}', ip_vlan)
+                                        ip_gateway = ip_gateway.group(1)
+                                        ip_gateway += '1'
+                                        break
+                                    except:
+                                        input('\nFormato do IP digitado é inválido. Tente novamente...')
 
 
-                        while True:
-                            ip_gateway_userInput = input(f'\nO ip do gateway é {ip_gateway}? [s ou n]\n')
+                                while True:
+                                    ip_gateway_userInput = input(f'\nO ip do gateway é {ip_gateway}? [s ou n]\n')
 
-                            if ip_gateway_userInput == 'n':
-                                ip_gateway = input('\nQual o IP do gateway?\n')
-                                break
+                                    if ip_gateway_userInput == 'n':
+                                        ip_gateway = input('\nQual o IP do gateway?\n')
+                                        break
+                                    
+                                    elif ip_gateway_userInput == 's':
+                                        break
+                                    
+                                    else:
+                                        input('Opção incorreta. Pressione qualquer tecla para tentar novamente')
 
-                            elif ip_gateway_userInput == 's':
-                                break
+                                netplan_text += f'''{interface}.{vlan}:
+            addresses:
+            - {ip_vlan}/{mask_vlan}
+            id: {vlan}
+            link: {interface}
+            routes:
+            - to: default
+              via: {ip_gateway}
+              metric: {i}00
+        '''
 
-                            else:
-                                input('Opção incorreta. Pressione qualquer tecla para tentar novamente')
-                        
-                        netplan_text += f'''{interfaces[user_input-1]}.{vlan}:
-                        addresses:
-                        - {ip_vlan}/{mask_vlan}
-                        id: {vlan}
-                        link: {interfaces[user_input-1]}
-                        routes:
-                        -   to: default
-                            via: {ip_gateway}
-                            metric: {i}00
-                    '''
-                    
-                    with open(f'/etc/netplan/{netplan_file}', 'w') as f:
-                        f.write(netplan_text)
+                            with open(f'/etc/netplan/{netplan_file}', 'w') as f:
+                                f.write(netplan_text)
 
-            user_input = input('\nNetplan configurado. Deseja aplicar as configurações? [s ou n]\n')
-                
-            if user_input == 's':
-                    os.system('sudo netplan apply')
-                    input('\nConfigurações aplicadas com sucesso! Pressione qualquer tecla para continuar...')
+                    user_input = input('\nNetplan configurado. Deseja aplicar as configurações? [s ou n]\n')
 
-            elif user_input == 'n':
-                input('Netplan permanece configurado, mas não aplicado. Para aplicá-lo execute o comando "sudo netplan apply"\nPressione qualuqer tecla para continuar...')
+                    if user_input == 's':
+                            os.system('sudo netplan apply')
+                            input('\nConfigurações aplicadas com sucesso! Pressione qualquer tecla para continuar...')
 
-            os.system('clear')
+                    elif user_input == 'n':
+                        input('\nNetplan configurado, mas não aplicado. Para aplicá-lo execute o comando "sudo netplan apply"\nPressione qualquer tecla para continuar...')
+
+                    interfaces_configured = True
+
+                    os.system('clear')
+                      
 
         # 3 - Configuração do DHCP Server 
         if conf_init == '3' or conf_init == '6':
-            print('Opção para configuração de DHCP indisponível')
-            input('Pressione qualquer tecla para voltar à tela inicial')
-            continue
+
+            def get_network(ip, mask):
+                rede = ipaddress.IPv4Network(f'{ip}/{mask}', strict=False)
+
+                return rede.network_address, rede.broadcast_address, rede.netmask
+
+            #--------VARIÁVEIS-------------
+
+            list_interface_data = []
+
+            list_interfaces = []
+
+            text_default_dhcp_conf = '''default-lease-time 43200;   
+max-lease-time 43200;                               
+
+authoritative;
+
+
+'''
+            isc_dhcpd_text = 'INTERFACESv4="'
+
+            dic_mask = {
+                '18':'255.255.192.0',
+                '19':'255.255.224.0',
+                '20':'255.255.240.0',
+                '21':'255.255.248.0',
+                '22':'255.255.252.0',
+                '23':'255.255.254.0',
+                '24':'255.255.255.0',
+                '25':'255.255.255.128',
+                '26':'255.255.255.192',
+                '27':'255.255.255.224',
+                '28':'255.255.255.240',
+                '29':'255.255.255.248',
+                '30':'255.255.255.252'
+
+            }
+
+            re_interface = re.compile(r'\s+(e\w*\d+|e\w*\d+\..+):\s*\n\s*addresses:\s*\n\s*- (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d{1,2})')
+            re_ip_mask = re.compile(r'addresses:\s*\n\s*- (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d{1,2})')
+            re_gw = re.compile(r'via: (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})')
+            re_ip_format = re.compile(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
+
+            #-----------PATHS-----------------
+
+            dhcp_conf_file = '/etc/dhcp/dhcpd.conf'
+
+            isc_dhcpd_file = '/etc/default/isc-dhcp-server'
+
+            #-----List netplan-----
+            os.system('clear')
+
+            list_netplan = os.listdir('/etc/netplan')
+
+            question = [
+                    inquirer.List('netplan', 
+                                message='Selecione o arquivo que você deseja editar:',
+                                choices=list_netplan,
+                                default=list_netplan[0])
+                ]
+
+            answer = inquirer.prompt(question)
+
+            netplan_file = str(answer['netplan'])
+
+            netplan_file = f'/etc/netplan/{netplan_file}'
+
+            #-------ALGORITMO----------------
+
+            with open(netplan_file, 'r') as f:
+                text = f.read()
+
+            interfaces = re_interface.findall(text)
+            gw = re_gw.findall(text)
+
+            for i, tuples in enumerate(interfaces):
+                tuples = list(tuples)
+                tuples.append(gw[i])
+                list_interface_data.append(tuples)
+                list_interfaces.append(tuples[0])
+
+            questions = [
+                inquirer.Checkbox(
+                    'selecao', 
+                    message='Quais interfaces deseja configurar?',
+                    choices=list_interfaces
+                    )
+            ]
+
+            answers = inquirer.prompt(questions)
+
+            #----------isc-dhcp-server---------
+            valores_selecionados = answers['selecao']
+
+            for valor in valores_selecionados:
+                    if valor == valores_selecionados[-1]:
+                        isc_dhcpd_text += valor + '"\n'
+                    else:
+                        isc_dhcpd_text += valor + ' '
+
+            isc_dhcpd_text += 'INTERFACESv6=""'
+
+            with open(isc_dhcpd_file, 'w') as f:
+                f.write(isc_dhcpd_text)
+                
+            print('\nArquivo isc-dhcpd-server configurado!\n')
+            input('\nPressione qualquer tecla para prosseguir com a configuração do dhcp.conf')
+
+            #--------------dhcp.conf-----------
+            print('\nIniciando configuração do dhcp.conf...\n')
+
+            for v in list_interface_data:
+                if v[0] not in answers['selecao']:
+                    continue
+
+                subnet, broad, netmask = get_network(v[1], dic_mask[v[2]])
+                ip_gw = v[3]
+
+                while True:
+                    os.system('clear')
+
+                    print(f'Rede: {subnet} / Broadcast: {broad} / Máscara: {netmask}\nGateway: {ip_gw}')
+
+                    ip_range_init = input('\nQual o primeiro IP do range?\n')
+                    ip_range_final = input('\nQual o último IP do range?\n')
+
+                    if not re_ip_format.search(ip_range_init):
+                        input(f'\nO IP inicial {ip_range_init} foi digitado incorretamente. Pressione qualquer tecla para tentar novamente...')
+                        continue
+
+                    if not re_ip_format.search(ip_range_final):
+                        input(f'\nO IP final {ip_range_final} foi digitado incorretamente. Pressione qualquer tecla para tentar novamente...')
+                        continue
+
+                    ip_net = ipaddress.IPv4Network(f'{subnet}/{netmask}', strict=False)
+                    
+                    try:
+                        compare_init = ipaddress.IPv4Network(f'{ip_range_init}/{netmask}', strict=False).compare_networks(ip_net)
+
+                    except:
+                        input(f'\nO primeiro IP do range ({ip_range_init}) foi digitado incorretamente')
+                        continue
+
+                    try:
+                        compare_final = ipaddress.IPv4Network(f'{ip_range_final}/{netmask}', strict=False).compare_networks(ip_net)
+
+                    except:
+                        input(f'\nO último IP do range ({ip_range_final}) foi digitado incorretamente')
+                        continue
+
+                    if compare_init != 0 and compare_final != 0:
+                        input('\nOs IPs inicial e final não pertencem à rede. Pressione qualquer tecla para tentar novamente')
+                        continue
+
+                    elif compare_init != 0 and compare_final == 0:
+                        input('\nO IP inicial não faz parte da rede. Pressione qualquer tecla para tentar novamente...')
+                        continue
+
+                    elif compare_init == 0 and compare_final != 0:
+                        input('\nO IP final não faz parte da rede. Pressione qualquer tecla para tentar novamente...')
+                        continue
+
+                    if ip_range_init == str(subnet) or ip_range_init == str(broad):
+                        input('\nO IP inicial deve ser diferente do IP de rede ou broadcast. Pressione qualquer tecla para tentar novamente...')
+                        continue
+                    
+                    elif ip_range_final == str(subnet) or ip_range_final == str(broad):
+                        input('\nO IP final deve ser diferente do IP de rede ou broadcast. Pressione qualquer tecla para tentar novamente...')
+                        continue
+                    
+                    user_input1 = input(f'\nO IP do tftp é {v[1]}? [s ou n]\n')
+
+                    if user_input1 == 's':
+                        ip_tftp = v[1]
+
+                    else:
+                        ip_tftp = input('\nQual o ip do tftp?\n')
+
+                    user_input2 = input(f'\nO IP do ntp é {v[1]}? [s ou n]\n')
+                    
+                    if user_input2 == 's':
+                        ip_ntp = v[1]
+
+                    else:
+                        ip_ntp = input('\nQual o IP do ntp?\n')
+
+                    text_default_dhcp_conf += f'''subnet {subnet} netmask {netmask} {{
+        range {ip_range_init} {ip_range_final};                
+        option broadcast-address {broad};         
+        option routers {ip_gw};                      
+        option tftp-server-name "{ip_tftp}";          
+        option ntp-servers {ip_ntp};                  
+}}
+
+'''
+                    break
+                
+            with open(dhcp_conf_file, 'w') as f:
+                f.write(text_default_dhcp_conf)
+
+            os.system('systemctl status isc-dhcp-server')
+            print('\nServiço dhcp reiniciado\n')
+            input('\ndhcp.conf configurado corretamente. Pressione qualquer tecla para sair')
+                
 
         # 4 - Configuração do TFTP Server
         if conf_init == '4' or conf_init == '6':
@@ -312,15 +622,20 @@ Opção: ''')
             texto = ''
 
             # Abre o arquivo e acrescenta opções no tftp
-            with open('/etc/default/tftpd-hpa', 'r') as f:
-                lines = f.readlines()
+            try:
+                with open('/etc/default/tftpd-hpa', 'r') as f:
+                    lines = f.readlines()
 
-                for line in lines:
-                    if re.search('TFTP_OPTIONS', line):
-                        texto += 'TFTP_OPTIONS="-4 --secure --create --verbose --verbose --verbose --verbose"\n'
+            except FileNotFoundError as e:
+                input('Arquivo tftp-hpa não encontrado. Verifique se o arquivo se encontra no diretório /etc/default\nPressione qualquer tecla para continuar')
+                continue
 
-                    else:
-                        texto += line
+            for line in lines:
+                if re.search('TFTP_OPTIONS', line):
+                    texto += 'TFTP_OPTIONS="-4 --secure --create --verbose --verbose --verbose --verbose"\n'
+
+                else:
+                    texto += line
 
             with open('/etc/default/tftpd-hpa', 'w') as f:
                 f.write(texto)
