@@ -1,5 +1,3 @@
-#! usr/bin/env python3
-
 import re, subprocess, socket, openpyxl, os, pexpect, shutil, inquirer, ipaddress
 
 #============ Definindo funções =============================
@@ -409,7 +407,6 @@ Opção:  ''')
 
                     os.system('clear')
                       
-
         # 3 - Configuração do DHCP Server 
         if conf_init == '3' or conf_init == '6':
 
@@ -611,12 +608,22 @@ authoritative;
                 
             with open(dhcp_conf_file, 'w') as f:
                 f.write(text_default_dhcp_conf)
+            print('Configurando o usuário e o grupo TFTP\n')
 
-            os.system('systemctl status isc-dhcp-server')
+            os.system('systemctl restart isc-dhcp-server')
             print('\nServiço dhcp reiniciado\n')
             input('\ndhcp.conf configurado corretamente. Pressione qualquer tecla para sair')
-                
 
+            # -------Criação de usuário -------------------
+            print('Configurando o usuário e o grupo DHCPD\n')
+            
+            os.system('sudo groupadd dhcpd')
+            os.system('sudo useradd -g dhcpd dhcpd')
+
+            print('Usuário e o grupo DHCPD criado\n')
+
+            input('\nPressione qualquer tecla para voltar ao Menu Principal...')
+    
         # 4 - Configuração do TFTP Server
         if conf_init == '4' or conf_init == '6':
             print('Iniciando a configuração do TFTP...\n')
@@ -645,7 +652,7 @@ authoritative;
             print('Configurando o usuário e o grupo TFTP\n')
 
             shell('sudo groupadd tftp')
-            shell('sudo useradd -G tftp tftp')
+            shell('sudo useradd -g tftp tftp')
 
             print('Grupo e usuário tftp criado!\n')
 
@@ -685,11 +692,78 @@ authoritative;
             else:
                  print('O serviço está inativo\n')
 
+            input('\nPressione qualquer tecla para retornar ao menu inicial...')
+
         # 5 - Configuração do NTPSEC
         if conf_init == '5' or conf_init == '6':
-            input('Opção se encontra indisponível.\nPressione qualquer tecla para voltar ao menu principal...')
-            continue
-           
+            input('Por enquanto, apenas está sendo configurado o ntp.conf. Pressione "Enter" para continuar...')
+
+            ntp_sec_conf = '''# /etc/ntpsec/ntp.conf, configuration for ntpd; see ntp.conf(5) for help
+
+driftfile /var/lib/ntpsec/ntp.drift
+leapfile /usr/share/zoneinfo/leap-seconds.list
+
+# To enable Network Time Security support as a server, obtain a certificate
+# (e.g. with Let's Encrypt), configure the paths below, and uncomment:
+# nts cert CERT_FILE
+# nts key KEY_FILE
+# nts enable
+
+# You must create /var/log/ntpsec (owned by ntpsec:ntpsec) to enable logging.
+#statsdir /var/log/ntpsec/
+#statistics loopstats peerstats clockstats
+#filegen loopstats file loopstats type day enable
+#filegen peerstats file peerstats type day enable
+#filegen clockstats file clockstats type day enable
+
+# This should be maxclock 7, but the pool entries count towards maxclock.
+tos maxclock 11
+
+# Comment this out if you have a refclock and want it to be able to discipline
+# the clock by itself (e.g. if the system is not connected to the network).
+tos minclock 4 minsane 3
+
+# Specify one or more NTP servers.
+
+# Public NTP servers supporting Network Time Security:
+# server time.cloudflare.com nts
+
+# Use servers from the NTP Pool Project. Approved by Ubuntu Technical Board
+# on 2011-02-08 (LP: #104525). See https://www.pool.ntp.org/join.html for
+# more information.
+#pool 0.ubuntu.pool.ntp.org iburst
+#pool 1.ubuntu.pool.ntp.org iburst
+#pool 2.ubuntu.pool.ntp.org iburst
+#pool 3.ubuntu.pool.ntp.org iburst
+
+pool %IP_NTP% iburst
+
+# Use Ubuntu's ntp server as a fallback.
+#server ntp.ubuntu.com
+
+# Access control configuration; see /usr/share/doc/ntpsec-doc/html/accopt.html
+# for details.
+#
+# Note that "restrict" applies to both servers and clients, so a configuration
+# that might be intended to block requests from certain clients could also end
+# up blocking replies from your own upstream servers.
+
+# By default, exchange time with everybody, but don't allow configuration.
+restrict default kod nomodify nopeer noquery limited
+
+# Local users may interrogate the ntp server more closely.
+restrict 127.0.0.1
+restrict ::1
+'''
+
+            ntp_server = input('Qual o IP do servidor NTP?\n')
+            text = re.sub('%IP_NTP%', ntp_server, ntp_sec_conf)
+
+            with open('/etc/ntpsec/ntp.conf', 'w') as f:
+                f.write(text)
+
+            input('\nPressione qualquer tecla para continuar...')
+         
     elif entrada_inicial == '2':
 
         # --> Criar padrão de digitos no extensions.ramais
@@ -1405,12 +1479,154 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
     # Versão 1.3.3 (03-07-2024)
     # Definiçoes
 
+        # Funções
+        def create_model(path_file, model):
+            text = re.sub('%ASTER%', ip_asterisk, model)
+            text = re.sub('%PASS%', pass_asterisk, text)
+            text = re.sub('%WEB_PASS%', pass_web, text)
+
+            with open(path_file, 'w') as f:
+                f.write(text)
+
         # Declaração de variáveis
         quant_arquivos = 0
         lista_modelos = [r'cp-?3905', r'cp-?7821', r'cp-?7942', r'cp-?8845', r'cp-?8865', r'cp-?9845', \
                          r'gxp-?1615', r'gxp-?1625', r'gxp-?2170', 't22p']
 
         # Configuração dos telefones
+        gxp1625_model = '''<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Grandstream XML Provisioning Configuration -->
+<gs_provision version="1">
+  <config version="1">
+    <!-- Sip Server -->
+    <P47>%ASTER%</P47>
+
+    <!-- Authenticate Password -->
+    <P34>%PASS%</P34>
+
+    <!-- Account Display -->
+    <P2480>1</P2480>
+
+    <!-- Preferred Vocoder 1 - G.722 -->
+    <P57>9</P57>
+
+    <!-- Preferred Vocoder 2 - PCMA -->
+    <P58>8</P58>
+
+    <!-- NTP Server
+    <P30></P30> -->
+
+    <!-- Time Zone (-3) -->
+    <P64>BRST+3</P64>
+
+    <!-- Formato da data - dd-mm-yyyy -->
+    <P102>2</P102>
+
+    <!-- Formato da hora - 0-24h -->
+    <P122>1</P122>
+
+    <!-- Voice Vlan -->
+    <P51></P51>
+
+    <!-- Configuracao via TFTP -->
+    <P212>0</P212>
+
+    <!-- Caminho da configuracao no TFTP 
+    <P237></P237> -->
+
+    <!-- Linguagem -->
+    <P1362>pt</P1362>
+
+    <!-- Mostrar o User ID na tela -->
+    <P2380>1</P2380>
+
+    <!-- Admin password for web interface -->
+    <P2>%WEB_PASS%</P2>
+
+    <!-- Dial Plan -->
+    <P290>{ ** | **x+ | x+ | #x+ | #*x+ }</P290>
+
+    <!-- Ringtone -->
+    <P104>3</P104>
+  </config>
+</gs_provision>
+'''
+        gxp2170_model = '''<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Grandstream XML Provisioning Configuration -->
+<gs_provision version="1">
+  <config version="1">
+    <!-- Forma de configuracao - TFTP -->
+    <P212>0</P212>
+
+    <!-- Servidor de configuracao
+    <P237></P237> -->
+
+    <!-- SIP Server -->
+    <P47>%ASTER%</P47>
+
+    <!-- Password -->
+    <P34>%PASS%</P34>
+
+    <!-- Preferencia 1 de Codec - G.722 -->
+    <P57>9</P57>
+
+    <!-- Preferencia 2 de Codec - PCMA -->
+    <P58>8</P58>
+
+    <!-- NTP Server
+    <P30></P30> -->
+
+    <!-- Formato da data - dd-mm-yyyy -->
+    <P102>2</P102>
+
+    <!-- Mostrar data na barra superior -->
+    <P8387>1</P8387>
+
+    <!-- Formato da hora - 0-24h -->
+    <P122>1</P122>
+
+    <!-- Time Zone (-3) -->
+    <P64>BRST+3</P64>
+
+    <!-- Descanso de Tela -->
+    <P2918>0</P2918>
+    <!-- Desligar o bluetooth -->
+    <P2910>0</P2910>
+
+    <!-- Wallpaper download -->
+    <P2916>1</P2916>
+
+    <!-- Caminho do wallpaper -->
+    <P2917></P2917>
+
+    <!-- Voice Vlan -->
+    <P51></P51>
+
+    <!-- Linguagem -->
+    <P1362>pt</P1362>
+
+    <!-- Admin password for web interface -->
+    <P2>%WEB_PASS%</P2>
+
+    <!-- Dial Plan -->
+    <P290>{ ** | **x+ | x+ | #x+ | #*x+ }</P290>
+
+    <!-- City Code Auto -->
+    <P1405>0</P1405>
+
+    <!-- City Code -->
+    <P1377>Rio de Janeiro, RJ, Brazil</P1377>
+
+    <!-- Update Interval -->
+    <P1378>60</P1378>
+
+    <!-- Unidade Temp -->
+    <P1379>C</P1379> -->
+
+  </config>
+</gs_provision>
+'''
+
         cp_3905 = '''<device>
 <deviceProtocol>SIP</deviceProtocol>
 <sshUserId>cisco</sshUserId>
@@ -1625,10 +1841,7 @@ exten => %PADRAO_RAMAIS%,1,NoOp(Ramal ${CALLERID(num)} LIGANDO PARA ${EXTEN})
 <certHash></certHash>
 <encrConfig>false</encrConfig>
 </device>
-
-
-
-        '''
+'''
         cp_7821 = '''<?xml version="1.0" encoding="UTF-8"?>
 <device>
 <fullConfig>true</fullConfig>
@@ -4085,14 +4298,18 @@ local_time.time_zone_name = Brazil(DST)
 e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continuar...')
         os.system('clear')
         ip_asterisk = input("Qual o IP do asterisk? ")
-        ip_ntp = input('Qual o Ip do NTP? ')
         pass_asterisk = input("Qual a senha de registro dos telefones? ")
         check_tel = input("Vão ser configurados telefones GrandStream? (s ou n): ")
 
 
         if check_tel == 's':
-           ip_tftp = input('Qual o IP do TFTP? ')
            pass_web = input('Qual senha será utilizada para acesso WEB dos telefones? ')
+
+           print('Criando os arquivos de configuração padrão dos modelos GXP1615, GXP1625 e GXP2170')
+   
+           create_model('/srv/tftp/cfggxp1615.xml', gxp1625_model)
+           create_model('/srv/tftp/cfggxp1625.xml', gxp1625_model)
+           create_model('/srv/tftp/cfggxp2170.xml', gxp2170_model)
 
         # Abrindo Planilha e Página
         workbook = openpyxl.load_workbook('/srv/tftp/AP.xlsx')
@@ -4143,8 +4360,8 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                            shell(f'touch {new_name}')
                            write_text(new_name, gxp_2170)
 
-                           replace_pat(new_name, '%NTP%', str(ip_ntp))
-                           replace_pat(new_name, '%TFTP%', str(ip_tftp))
+                           replace_pat(new_name, '%NTP%', '')
+                           replace_pat(new_name, '%TFTP%', '')
                            replace_pat(new_name, '%WEB_PASS%', str(pass_web))
 
 
@@ -4202,8 +4419,8 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, gxp_1615)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
-                               replace_pat(new_name, '%TFTP%', str(ip_tftp))
+                               replace_pat(new_name, '%NTP%', '')
+                               replace_pat(new_name, '%TFTP%', '')
                                replace_pat(new_name, '%WEB_PASS%', str(pass_web))
 
 
@@ -4247,8 +4464,8 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, gxp_1615)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
-                               replace_pat(new_name, '%TFTP%', str(ip_tftp))
+                               replace_pat(new_name, '%NTP%', '')
+                               replace_pat(new_name, '%TFTP%', '')
                                replace_pat(new_name, '%WEB_PASS%', str(pass_web))
 
                                if num_linha1_bool == True:
@@ -4347,7 +4564,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_3905)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
@@ -4378,7 +4595,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_7821)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
@@ -4412,7 +4629,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_8845)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
@@ -4445,7 +4662,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_8865)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
@@ -4480,7 +4697,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_7942)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
@@ -4513,7 +4730,7 @@ e que tenha a página nomeada como AP.\n\nPressione qualquer tecla para continua
                                shell(f'touch {new_name}')
                                write_text(new_name, cp_9845)
 
-                               replace_pat(new_name, '%NTP%', str(ip_ntp))
+                               replace_pat(new_name, '%NTP%', '')
 
                                if num_linha1_bool == True:
                                    replace_pat(new_name, '%RAMAL%', str(num_linha1))
